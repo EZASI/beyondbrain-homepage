@@ -1,0 +1,124 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --navy-950: oklch(0.135 0.022 225);
+  --navy-900: oklch(0.175 0.028 220);
+  --navy-800: oklch(0.235 0.035 215);
+  --cyan-400: oklch(0.88 0.135 178);
+  --cyan-300: oklch(0.93 0.09 178);
+  --mist-100: oklch(0.965 0.009 185);
+  --mist-200: oklch(0.915 0.014 185);
+  --ink-900: oklch(0.21 0.025 220);
+  --ink-600: oklch(0.46 0.022 220);
+  --white-100: oklch(0.975 0.008 185);
+
+  --surface-dark: var(--navy-950);
+  --surface-dark-raised: var(--navy-900);
+  --surface-light: var(--mist-100);
+  --text-on-dark: var(--white-100);
+  --text-on-light: var(--ink-900);
+  --text-muted-dark: oklch(0.76 0.02 205);
+  --text-muted-light: var(--ink-600);
+  --accent: var(--cyan-400);
+  --accent-soft: var(--cyan-300);
+  --line-dark: oklch(0.94 0.01 185 / 0.17);
+  --line-light: oklch(0.3 0.025 215 / 0.2);
+  --button-primary-bg: var(--white-100);
+  --button-primary-text: var(--navy-950);
+
+  --font-display: 'Shippori Mincho', 'Noto Serif CJK JP', 'Yu Mincho', serif;
+  --font-body: 'Zen Kaku Gothic New', 'Noto Sans CJK JP', 'Hiragino Kaku Gothic ProN', sans-serif;
+  --font-latin: 'Manrope', 'Helvetica Neue', sans-serif;
+  color-scheme: dark;
+  font-synthesis: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: auto;
+  background: var(--surface-dark);
+  scroll-padding-top: 88px;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100dvh;
+  overflow-x: clip;
+  background: var(--surface-dark);
+  color: var(--text-on-dark);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+img,
+svg,
+canvas {
+  display: block;
+}
+
+h1,
+h2,
+h3,
+p,
+dl,
+dd {
+  margin: 0;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--surface-dark);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 5px;
+}
+
+#root {
+  min-height: 100dvh;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
