@@ -15,7 +15,7 @@ beforeEach(() => {
   mail = []
   answer = () => new Response(JSON.stringify({ id: 'stand-in' }), { status: 200 })
   process.env.RESEND_API_KEY = 're_test_key'
-  delete process.env.INQUIRY_NOTIFY_EMAIL
+  process.env.INQUIRY_NOTIFY_EMAIL = 'desk@example.com'
   delete process.env.INQUIRY_FROM_EMAIL
   console.log = () => {}
   globalThis.fetch = async (url, options) => {
@@ -84,7 +84,7 @@ test('a complete inquiry is emailed to the company and answered with a reference
   assert.equal(sent.url, 'https://api.resend.com/emails')
   assert.equal(sent.options.method, 'POST')
   assert.equal(sent.options.headers.authorization, 'Bearer re_test_key')
-  assert.deepEqual(sent.body.to, ['contact@beyondxbrain.com'])
+  assert.deepEqual(sent.body.to, ['desk@example.com'])
   assert.equal(sent.body.from, 'BeyondBrain Showroom <inquiry@beyondxbrain.com>')
   assert.equal(sent.body.reply_to, 'taro@example.co.jp')
   assert.ok(sent.body.subject.includes(res.body.ref))
@@ -102,12 +102,20 @@ test('a complete inquiry is emailed to the company and answered with a reference
   }
 })
 
-test('the destination and sender can be set in the project settings', async () => {
-  process.env.INQUIRY_NOTIFY_EMAIL = 'desk@example.com'
+test('the destination and sender come from the project settings', async () => {
+  process.env.INQUIRY_NOTIFY_EMAIL = 'front@example.com'
   process.env.INQUIRY_FROM_EMAIL = 'Desk <desk@example.com>'
   await call({ body: inquiry() })
-  assert.deepEqual(mail[0].body.to, ['desk@example.com'])
+  assert.deepEqual(mail[0].body.to, ['front@example.com'])
   assert.equal(mail[0].body.from, 'Desk <desk@example.com>')
+})
+
+test('with no destination chosen nothing is sent, rather than guessing an address', async () => {
+  delete process.env.INQUIRY_NOTIFY_EMAIL
+  const res = await call({ body: inquiry() })
+  assert.equal(res.statusCode, 503)
+  assert.deepEqual(res.body, { ok: false, error: 'not_configured' })
+  assert.equal(mail.length, 0)
 })
 
 test('a question with no items is accepted, and says so in the email', async () => {
@@ -260,6 +268,11 @@ test('GET says whether inquiries can be delivered, without sending one', async (
   delete process.env.RESEND_API_KEY
   const missing = await call({ method: 'GET' })
   assert.deepEqual(missing.body, { ok: true, delivery: 'none' })
+
+  process.env.RESEND_API_KEY = 're_test_key'
+  delete process.env.INQUIRY_NOTIFY_EMAIL
+  const nowhere = await call({ method: 'GET' })
+  assert.deepEqual(nowhere.body, { ok: true, delivery: 'none' })
   assert.equal(mail.length, 0)
 })
 

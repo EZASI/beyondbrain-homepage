@@ -8,18 +8,21 @@
 // another way to reach us.
 //
 // Environment (Vercel project settings):
-//   RESEND_API_KEY        required to send. Without it every inquiry is refused
-//                         with 503 and the page falls back to an email draft.
-//   INQUIRY_NOTIFY_EMAIL  where inquiries land. Default: contact@beyondxbrain.com
+//   RESEND_API_KEY        required to send.
+//   INQUIRY_NOTIFY_EMAIL  required: the address inquiries are delivered to. It has
+//                         no default on purpose. The mail service accepts a message
+//                         for an address that does not exist and it bounces later,
+//                         unseen, so the destination must be one somebody chose.
 //   INQUIRY_FROM_EMAIL    sender, on a domain verified in Resend.
 //                         Default: BeyondBrain Showroom <inquiry@beyondxbrain.com>
+// Without the two required settings every inquiry is refused with 503 and the page
+// falls back to an email draft.
 
 import { randomInt } from 'node:crypto'
 
 const LIMITS = { name: 120, company: 200, email: 200, message: 4000 }
 const MAX_ITEMS = 40
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
-const NOTIFY_DEFAULT = 'contact@beyondxbrain.com'
 const FROM_DEFAULT = 'BeyondBrain Showroom <inquiry@beyondxbrain.com>'
 
 // A speed bump, not a guarantee: one warm instance remembers who called it
@@ -150,11 +153,13 @@ export function compose(inquiry, ref, now = new Date()) {
 
 export default async function handler(req, res) {
   const key = process.env.RESEND_API_KEY
+  const to = process.env.INQUIRY_NOTIFY_EMAIL
+  const configured = Boolean(key && to)
 
   // A plain GET says whether inquiries can be delivered, without sending one.
   if (req.method === 'GET') {
     res.setHeader('Cache-Control', 'no-store')
-    return res.status(200).json({ ok: true, delivery: key ? 'email' : 'none' })
+    return res.status(200).json({ ok: true, delivery: configured ? 'email' : 'none' })
   }
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'GET, POST')
@@ -189,7 +194,7 @@ export default async function handler(req, res) {
   if (fields.length) return res.status(400).json({ ok: false, error: 'invalid', fields })
 
   const ref = reference()
-  if (!key) {
+  if (!configured) {
     console.log('[inquiry:not_configured]', ref)
     return res.status(503).json({ ok: false, error: 'not_configured' })
   }
@@ -202,7 +207,7 @@ export default async function handler(req, res) {
       headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
       body: JSON.stringify({
         from: process.env.INQUIRY_FROM_EMAIL || FROM_DEFAULT,
-        to: [process.env.INQUIRY_NOTIFY_EMAIL || NOTIFY_DEFAULT],
+        to: [to],
         reply_to: inquiry.email,
         subject,
         text,
