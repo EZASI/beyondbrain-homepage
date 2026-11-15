@@ -79,7 +79,6 @@ export type Copy = {
     info: string
     close: string
     language: string
-    list: string
     listCount: (count: number) => string
     itemsOn: (line: string) => string
     previous: string
@@ -89,16 +88,40 @@ export type Copy = {
     added: string
     addedRemove: string
     aboutTitle: string
-    emptyList: string
-    listHint: (email: string) => string
+    /** The sheet that holds the inquiry list and the form. */
+    inquiry: string
+    openForm: string
     compose: string
     copy: string
     copied: string
     remove: (name: string) => string
     mailSubject: string
     mailIntro: string
-    mailFields: string[]
     mailRow: (line: string, item: string) => string
+    mailLine: (label: string, value: string) => string
+    form: {
+      emptyList: string
+      name: string
+      company: string
+      email: string
+      message: string
+      messageHint: string
+      optional: string
+      send: string
+      sending: string
+      /** The privacy sentence, written around its link. */
+      privacy: [before: string, link: string, after: string]
+      privacyHref: string
+      errors: { name: string; email: string; message: string }
+      failed: string
+      unavailable: string
+      limited: string
+      byEmail: (email: string) => string
+      sentTitle: string
+      sentRef: (ref: string) => string
+      sentText: string
+      sentBack: string
+    }
   }
 }
 
@@ -543,7 +566,6 @@ function build(lang: Lang): Copy {
       info: t('会社情報とお問い合わせ', 'Company information and contact'),
       close: t('閉じる', 'Close'),
       language: t('言語', 'Language'),
-      list: t('問い合わせリスト', 'Inquiry list'),
       listCount: (count) =>
         lang === 'ja'
           ? `問い合わせリスト（${count}件）`
@@ -556,14 +578,8 @@ function build(lang: Lang): Copy {
       added: t('リストに追加しました', 'Added to the list'),
       addedRemove: t('追加済み（外す）', 'Added (remove)'),
       aboutTitle: t('BeyondBrainについて', 'About BeyondBrain'),
-      emptyList: t(
-        'まだ何も入っていません。展示を開いて「問い合わせリストに追加」を押すと、ここにまとまります。',
-        'Nothing here yet. Open an item and choose “Add to inquiry list” to collect it here.',
-      ),
-      listHint: (email) =>
-        lang === 'ja'
-          ? `リストの内容を本文に入れたメールを作成します。宛先は ${email} です。`
-          : `This drafts an email to ${email} with the list in the body.`,
+      inquiry: t('お問い合わせ', 'Inquiry'),
+      openForm: t('お問い合わせフォームを開く', 'Open the inquiry form'),
       compose: t('メールを作成', 'Draft the email'),
       copy: t('内容をコピー', 'Copy the text'),
       copied: t('コピーしました', 'Copied'),
@@ -573,11 +589,55 @@ function build(lang: Lang): Copy {
         'Inquiry from the BeyondBrain showroom',
       ),
       mailIntro: t('以下について問い合わせます。', 'I would like to ask about the following:'),
-      mailFields:
-        lang === 'ja'
-          ? ['会社名：', 'ご担当者名：', 'ご希望の数量・納期など：']
-          : ['Company:', 'Name:', 'Quantity, timing and other details:'],
       mailRow: (line, item) => (lang === 'ja' ? `・${line}／${item}` : `- ${line} / ${item}`),
+      mailLine: (label, value) => (lang === 'ja' ? `${label}：${value}` : `${label}: ${value}`),
+      form: {
+        emptyList: t(
+          'ご相談やご質問をお送りください。展示を開いて「問い合わせリストに追加」を押すと、その展示も一緒に送れます。',
+          'Send us your question. To ask about a specific item, open it and choose “Add to inquiry list”, and it is sent along.',
+        ),
+        name: t('お名前', 'Name'),
+        company: t('会社名', 'Company'),
+        email: t('メールアドレス', 'Email'),
+        message: t('ご用件', 'Message'),
+        messageHint: t(
+          'ご希望の数量や納期、ご相談の内容など',
+          'Quantities, timing, or what you would like to discuss',
+        ),
+        optional: t('任意', 'optional'),
+        send: t('送信する', 'Send inquiry'),
+        sending: t('送信中…', 'Sending…'),
+        privacy:
+          lang === 'ja'
+            ? ['ご入力の内容は、', 'プライバシーポリシー', 'に沿って取り扱います。']
+            : ['What you enter is handled under our ', 'privacy policy', ' (in Japanese).'],
+        privacyHref: 'https://www.beyondxbrain.com/privacy',
+        errors: {
+          name: t('お名前を入力してください。', 'Enter your name.'),
+          email: t('メールアドレスを確認してください。', 'Check the email address.'),
+          message: t('ご用件を入力してください。', 'Enter your message.'),
+        },
+        failed: t(
+          '送信できませんでした。入力した内容は残っています。もう一度送るか、メールでお送りください。',
+          'This did not send. What you typed is still here. Try again, or send it by email.',
+        ),
+        unavailable: t(
+          'いまフォームからは送信できません。入力した内容をメールでお送りください。',
+          'The form cannot send right now. Please send what you typed by email.',
+        ),
+        limited: t(
+          '短い時間に送信が続いたため、いまは受け付けられません。少し待つか、メールでお送りください。',
+          'Too many inquiries were sent in a short time. Wait a few minutes, or send it by email.',
+        ),
+        byEmail: (email) => (lang === 'ja' ? `宛先：${email}` : `To: ${email}`),
+        sentTitle: t('お問い合わせを送信しました', 'Inquiry sent'),
+        sentRef: (ref) => (lang === 'ja' ? `受付番号 ${ref}` : `Reference ${ref}`),
+        sentText: t(
+          '内容を確認のうえ、このアドレスにご連絡します。',
+          'We will read it and reply to this address.',
+        ),
+        sentBack: t('ショールームに戻る', 'Back to the showroom'),
+      },
     },
   }
 }

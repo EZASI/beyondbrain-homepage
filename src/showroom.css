@@ -10,6 +10,10 @@
   --rule: rgb(10 27 32 / 0.13);
   --mint: #5cf4d7;
   --mint-ink: #0a6b5e;
+  /* Fields and quiet surfaces on paper. */
+  --field: #f1f5f4;
+  --alert: #a8301c;
+  --alert-wash: #fcefeb;
   --float: 0 1px 2px rgb(10 27 32 / 0.07), 0 14px 38px rgb(10 27 32 / 0.13);
   --ease: cubic-bezier(0.22, 0.61, 0.21, 1);
   --pad: clamp(16px, 2.6vw, 36px);
@@ -307,6 +311,12 @@
 
 .sr-button:hover {
   transform: translateY(-1px);
+}
+
+.sr-button:disabled {
+  opacity: 0.55;
+  cursor: progress;
+  transform: none;
 }
 
 .sr-button[data-added='true'] {
@@ -1004,6 +1014,233 @@ button.sr-link {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+/* ── Inquiry form ──────────────────────────────────────────────────── */
+
+.sr-form {
+  display: grid;
+  gap: 16px;
+}
+
+/* On the plain page the form stands on the wall colour, not on a sheet of paper. */
+.sr-static .sr-form,
+.sr-static .sr-receipt {
+  width: min(100%, 460px);
+}
+
+.sr-static .sr-field input,
+.sr-static .sr-field textarea {
+  background: var(--paper);
+}
+
+.sr-form-list {
+  display: grid;
+  gap: 8px;
+}
+
+.sr-form-label {
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.sr-field {
+  display: grid;
+  gap: 6px;
+}
+
+.sr-field label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.sr-optional {
+  color: var(--ink-faint);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.sr-field-hint {
+  margin-top: -4px;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+/* 16px keeps phones from zooming in when a field is tapped. */
+.sr-field input,
+.sr-field textarea {
+  display: block;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--field);
+  box-shadow: inset 0 0 0 1px transparent;
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.5;
+  appearance: none;
+  transition: background-color 160ms ease-out, box-shadow 160ms ease-out;
+}
+
+.sr-field textarea {
+  min-height: 7.6em;
+  line-height: 1.7;
+  resize: vertical;
+}
+
+.sr-field input:hover,
+.sr-field textarea:hover {
+  box-shadow: inset 0 0 0 1px var(--rule);
+}
+
+.sr-field input:focus,
+.sr-field textarea:focus {
+  outline: none;
+  background: var(--paper);
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+
+.sr-field[data-invalid='true'] input,
+.sr-field[data-invalid='true'] textarea {
+  background: var(--paper);
+  box-shadow: inset 0 0 0 2px var(--alert);
+}
+
+/* A field that needs fixing still shows which one the keyboard is in. */
+.sr-field[data-invalid='true'] input:focus,
+.sr-field[data-invalid='true'] textarea:focus {
+  box-shadow: inset 0 0 0 2px var(--alert), 0 0 0 4px rgb(168 48 28 / 0.16);
+}
+
+.sr-field-error {
+  color: var(--alert);
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+/* Kept in the page but away from eyes, pointers and the tab order. */
+.sr-trap {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.sr-alert {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px 16px;
+  border-radius: 16px;
+  background: var(--alert-wash);
+  color: var(--ink);
+  font-size: 13.5px;
+  line-height: 1.75;
+}
+
+.sr-alert p:first-child {
+  color: var(--alert);
+  font-weight: 700;
+}
+
+.sr-alert-to {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.sr-alert .sr-button {
+  min-height: 42px;
+  padding: 0 18px;
+  font-size: 13.5px;
+}
+
+.sr-alert .sr-button-quiet {
+  background: var(--paper);
+}
+
+.sr-form-foot {
+  display: grid;
+  gap: 10px;
+}
+
+.sr-form-foot .sr-button {
+  width: 100%;
+}
+
+.sr-form-note {
+  color: var(--ink-faint);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.sr-form-note a {
+  text-decoration: underline;
+  text-decoration-color: var(--rule);
+  text-underline-offset: 3px;
+}
+
+.sr-receipt {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.sr-receipt-mark {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--mint);
+  color: var(--ink);
+  animation: sr-pop 420ms var(--ease);
+}
+
+.sr-receipt-title {
+  font-family: var(--font-display);
+  font-size: 25px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+/* The title takes focus so the result is announced; it is not a control. */
+.sr-receipt-title:focus {
+  outline: none;
+}
+
+.sr-receipt-ref {
+  padding: 9px 14px;
+  border-radius: 12px;
+  background: var(--field);
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  line-height: 1.5;
+  user-select: all;
+}
+
+.sr-receipt-email {
+  margin-top: -8px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.sr-receipt .sr-button {
+  margin-top: 6px;
 }
 
 /* ── Plain version, when the 3D room cannot run ────────────────────── */

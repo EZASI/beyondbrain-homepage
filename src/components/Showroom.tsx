@@ -12,7 +12,6 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
-  Copy as CopyIcon,
   Info,
   Mail,
   X,
@@ -35,6 +34,8 @@ import {
   type StationId,
 } from '../showroom/content'
 import { ShowroomScene, isWebGLAvailable } from '../showroom/ShowroomScene'
+import { useInquiry } from '../showroom/useInquiry'
+import { InquiryForm, InquiryReceipt } from './InquiryForm'
 import '../showroom.css'
 
 type Mode = 'loading' | 'ready' | 'static'
@@ -43,6 +44,7 @@ type Panel = 'info' | 'list' | null
 const STORAGE_KEY = 'beyondbrain.inquiry'
 const SITE_URL = 'https://www.beyondxbrain.com/'
 const INFO_HASHES = new Set(['about', 'company', 'contact'])
+const NO_ITEMS: string[] = []
 /** Glyphs drawn into the 3D room's screens and signs; requested up front so the fonts are ready. */
 const CANVAS_GLYPHS = '攻城バトルRPG定時退社バトロワオフィス・カードゲームタベモどっちが上？子午線'
 
@@ -65,21 +67,6 @@ function loadInquiry(): string[] {
   } catch {
     return []
   }
-}
-
-function inquiryText(copy: Copy, keys: string[]) {
-  const rows = keys
-    .map((key) => findItem(copy, key))
-    .filter((found) => found !== undefined)
-    .map(({ line, item }) => copy.ui.mailRow(line.title, item.name))
-  return [copy.ui.mailIntro, '', ...rows, '', ...copy.ui.mailFields].join('\n')
-}
-
-function mailto(copy: Copy, keys: string[] = []) {
-  if (keys.length === 0) return `mailto:${CONTACT_EMAIL}`
-  const subject = encodeURIComponent(copy.ui.mailSubject)
-  const body = encodeURIComponent(inquiryText(copy, keys))
-  return `mailto:${CONTACT_EMAIL}?subject=${subject}&body=${body}`
 }
 
 function setHead(selector: string, attribute: string, value: string) {
@@ -249,7 +236,14 @@ function ContactRow() {
   )
 }
 
-function InfoContent({ copy }: { copy: Copy }) {
+function InfoContent({
+  copy,
+  contact,
+}: {
+  copy: Copy
+  /** The way to write to us from where this is shown: a button to the form, or the form itself. */
+  contact?: ReactNode
+}) {
   const { about } = copy
   return (
     <>
@@ -295,6 +289,7 @@ function InfoContent({ copy }: { copy: Copy }) {
         {copy.contact.title}
       </h3>
       <p className="sr-prose">{copy.contact.text}</p>
+      {contact}
       <ContactRow />
 
       <nav className="sr-legal" aria-label={copy.legalLabel}>
@@ -345,6 +340,16 @@ function LineOutline({ copy }: { copy: Copy }) {
   )
 }
 
+/** The inquiry form on the plain page, where there is no list to send with it. */
+function StaticInquiry({ copy }: { copy: Copy }) {
+  const inquiry = useInquiry(copy, NO_ITEMS)
+  return inquiry.receipt ? (
+    <InquiryReceipt copy={copy} receipt={inquiry.receipt} />
+  ) : (
+    <InquiryForm copy={copy} keys={NO_ITEMS} inquiry={inquiry} />
+  )
+}
+
 /** The whole site as a plain page, for browsers that cannot draw the 3D room. */
 function StaticCatalogue({
   copy,
@@ -371,7 +376,7 @@ function StaticCatalogue({
 
         <LineOutline copy={copy} />
         <section className="sr-static-line">
-          <InfoContent copy={copy} />
+          <InfoContent copy={copy} contact={<StaticInquiry copy={copy} />} />
         </section>
       </main>
     </div>
@@ -408,7 +413,13 @@ export default function Showroom() {
   const [infoAnchor, setInfoAnchor] = useState<string | null>(initial.anchor ?? null)
   const [inquiry, setInquiry] = useState<string[]>(loadInquiry)
   const [justAdded, setJustAdded] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
+  const form = useInquiry(copy, inquiry)
+  const { clearReceipt } = form
+  /** Closing a sheet also puts away the note that an inquiry was sent. */
+  const closePanel = useCallback(() => {
+    setPanel(null)
+    clearReceipt()
+  }, [clearReceipt])
 
   const stationRef = useRef(station)
   const focusRef = useRef(focusKey)
@@ -589,8 +600,10 @@ export default function Showroom() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return
+      /* While Japanese text is being composed, Escape cancels the conversion, not the sheet. */
+      if (event.isComposing || event.keyCode === 229) return
       if (event.key === 'Escape') {
-        if (panel) setPanel(null)
+        if (panel) closePanel()
         else if (focusKey) setFocusKey(null)
         return
       }
@@ -604,7 +617,7 @@ export default function Showroom() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [focusKey, panel, stepItem, stepStation])
+  }, [closePanel, focusKey, panel, stepItem, stepStation])
 
   useEffect(() => {
     try {
@@ -661,14 +674,18 @@ export default function Showroom() {
     window.setTimeout(() => setJustAdded((current) => (current === key ? null : current)), 1800)
   }
 
-  const copyInquiry = async () => {
-    try {
-      await navigator.clipboard.writeText(`${CONTACT_EMAIL}\n\n${inquiryText(copy, inquiry)}`)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 1800)
-    } catch {
-      setCopied(false)
+  const openForm = () => setPanel('list')
+
+  /* Once sent, those items have done their job, and the sheet comes forward to say so. */
+  const submitInquiry: typeof form.submit = async (extra) => {
+    const sent = inquiry
+    const outcome = await form.submit(extra)
+    if (outcome?.kind === 'sent') {
+      /* Anything added while it was on its way was not part of it, and stays. */
+      setInquiry((keys) => keys.filter((key) => !sent.includes(key)))
+      setPanel('list')
     }
+    return outcome
   }
 
   if (mode === 'static') return <StaticCatalogue copy={copy} onLang={changeLang} />
@@ -748,7 +765,7 @@ export default function Showroom() {
             <button className="sr-button" type="button" onClick={() => navigate('fa-parts')}>
               {hero.primary}
             </button>
-            <button className="sr-link" type="button" onClick={() => openInfo('contact')}>
+            <button className="sr-link" type="button" onClick={openForm}>
               {hero.secondary}
               <ArrowUpRight size={16} aria-hidden="true" />
             </button>
@@ -946,60 +963,29 @@ export default function Showroom() {
       </div>
 
       {panel === 'info' && (
-        <Sheet
-          title={ui.aboutTitle}
-          closeLabel={ui.close}
-          anchor={infoAnchor}
-          onClose={() => setPanel(null)}
-        >
-          <InfoContent copy={copy} />
+        <Sheet title={ui.aboutTitle} closeLabel={ui.close} anchor={infoAnchor} onClose={closePanel}>
+          <InfoContent
+            copy={copy}
+            contact={
+              <button className="sr-button" type="button" onClick={openForm}>
+                {ui.openForm}
+              </button>
+            }
+          />
         </Sheet>
       )}
 
       {panel === 'list' && (
-        <Sheet title={ui.list} closeLabel={ui.close} onClose={() => setPanel(null)}>
-          {inquiry.length === 0 ? (
-            <p className="sr-prose">{ui.emptyList}</p>
+        <Sheet title={ui.inquiry} closeLabel={ui.close} onClose={closePanel}>
+          {form.receipt ? (
+            <InquiryReceipt copy={copy} receipt={form.receipt} onBack={closePanel} />
           ) : (
-            <>
-              <ul className="sr-inquiry">
-                {inquiry.map((key) => {
-                  const found = findItem(copy, key)
-                  if (!found) return null
-                  return (
-                    <li key={key}>
-                      <span>
-                        <small>{found.line.title}</small>
-                        {found.item.name}
-                      </span>
-                      <button
-                        className="sr-icon-button"
-                        type="button"
-                        aria-label={ui.remove(found.item.name)}
-                        onClick={() => setInquiry((keys) => keys.filter((entry) => entry !== key))}
-                      >
-                        <X size={16} aria-hidden="true" />
-                      </button>
-                    </li>
-                  )
-                })}
-              </ul>
-              <p className="sr-prose">{ui.listHint(CONTACT_EMAIL)}</p>
-              <div className="sr-sheet-actions">
-                <a className="sr-button" href={mailto(copy, inquiry)}>
-                  <Mail size={17} aria-hidden="true" />
-                  {ui.compose}
-                </a>
-                <button className="sr-button sr-button-quiet" type="button" onClick={copyInquiry}>
-                  {copied ? (
-                    <Check size={17} aria-hidden="true" />
-                  ) : (
-                    <CopyIcon size={17} aria-hidden="true" />
-                  )}
-                  {copied ? ui.copied : ui.copy}
-                </button>
-              </div>
-            </>
+            <InquiryForm
+              copy={copy}
+              keys={inquiry}
+              inquiry={{ ...form, submit: submitInquiry }}
+              onRemove={(key) => setInquiry((keys) => keys.filter((entry) => entry !== key))}
+            />
           )}
         </Sheet>
       )}
