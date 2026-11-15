@@ -4,6 +4,8 @@
   --paper: #ffffff;
   --ink: #0a1b20;
   --ink-soft: #4b5b61;
+  /* Running text laid over the timber floor needs a little more weight than on paper. */
+  --ink-floor: #34444a;
   --ink-faint: #7a888b;
   --rule: rgb(10 27 32 / 0.13);
   --mint: #5cf4d7;
@@ -36,6 +38,7 @@
   width: 100%;
   height: 100%;
   opacity: 0;
+  cursor: grab;
   touch-action: none;
   transition: opacity 900ms ease-out;
 }
@@ -148,6 +151,46 @@
   font-weight: 700;
   letter-spacing: 0.3em;
   line-height: 1;
+}
+
+.sr-brand small:lang(en) {
+  padding-left: 0;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+}
+
+/* Language switch: the same sliding-pill vocabulary as the navigation, at header scale. */
+.sr-lang {
+  grid-column: 1;
+  justify-self: start;
+  display: inline-flex;
+  height: 40px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: var(--float);
+}
+
+.sr-lang button {
+  min-width: 38px;
+  padding: 0 10px;
+  border-radius: 999px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 220ms ease-out, color 220ms ease-out;
+}
+
+.sr-lang button:hover {
+  color: var(--ink);
+}
+
+.sr-lang button[aria-pressed='true'] {
+  background: var(--ink);
+  color: #fff;
 }
 
 .sr-icon-button {
@@ -335,7 +378,7 @@ button.sr-link {
   left: clamp(20px, 5vw, 80px);
   bottom: calc(var(--nav-gap) + var(--nav-height) + clamp(18px, 4vh, 40px));
   display: grid;
-  grid-template-columns: auto minmax(0, 420px);
+  grid-template-columns: auto minmax(0, var(--measure, 420px));
   align-items: end;
   gap: 0 clamp(28px, 4vw, 60px);
   max-width: calc(100vw - 2 * clamp(20px, 5vw, 80px));
@@ -358,15 +401,25 @@ button.sr-link {
   letter-spacing: 0;
 }
 
+/* English sets more characters per line than Japanese, so its copy gets a wider measure. */
+.sr-hero:lang(en) {
+  --measure: 520px;
+}
+
+.sr-mincho:lang(en) {
+  letter-spacing: -0.015em;
+}
+
 .sr-hero-lead {
   font-size: 15.5px;
   font-weight: 700;
   line-height: 1.6;
+  text-wrap: balance;
 }
 
 .sr-hero-summary {
   margin-top: 6px;
-  color: var(--ink-soft);
+  color: var(--ink-floor);
   font-size: 13.5px;
   line-height: 1.8;
 }
@@ -381,29 +434,51 @@ button.sr-link {
 
 /* ── Wall caption ──────────────────────────────────────────────────── */
 
+/* Like the opening copy, it stands on the floor, so the wall is left to the display. */
 .sr-caption {
-  left: clamp(20px, 4.6vw, 76px);
-  top: 50%;
+  left: clamp(20px, 5vw, 80px);
+  bottom: calc(var(--nav-gap) + var(--nav-height) + clamp(18px, 4vh, 40px));
   display: grid;
-  gap: 8px;
+  grid-template-columns: auto minmax(0, var(--measure, 380px));
+  align-items: end;
+  gap: 0 clamp(28px, 4vw, 60px);
+  max-width: calc(100vw - 2 * clamp(20px, 5vw, 80px));
+}
+
+.sr-caption:lang(en) {
+  --measure: 440px;
+}
+
+.sr-caption-head,
+.sr-caption-body {
+  display: grid;
+  gap: 6px;
   justify-items: start;
-  width: min(250px, 19vw);
-  margin-top: -90px;
+}
+
+.sr-caption .sr-category,
+.sr-caption .sr-note {
+  color: var(--ink-floor);
 }
 
 .sr-caption h2 {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 10px;
-  font-size: clamp(20px, 1.9vw, 26px);
+  gap: 8px 12px;
+  max-width: 14.5em;
+  font-size: clamp(26px, 2.6vw, 40px);
   font-weight: 750;
-  letter-spacing: -0.02em;
-  line-height: 1.25;
+  letter-spacing: -0.03em;
+  line-height: 1.12;
+}
+
+.sr-caption h2 .sr-status {
+  letter-spacing: 0;
 }
 
 .sr-caption-text {
-  color: var(--ink-soft);
+  color: var(--ink-floor);
   font-size: 13.5px;
   line-height: 1.8;
 }
@@ -416,6 +491,21 @@ button.sr-link {
   line-break: strict;
   word-break: auto-phrase;
   text-wrap: pretty;
+}
+
+/* Latin text sits comfortably on tighter leading than Japanese does. */
+.sr-hero-summary:lang(en),
+.sr-caption-text:lang(en),
+.sr-card-text:lang(en),
+.sr-prose:lang(en),
+.sr-principle:lang(en),
+.sr-capabilities p:lang(en),
+.sr-profile div:lang(en) {
+  line-height: 1.6;
+}
+
+.sr-note:lang(en) {
+  line-height: 1.5;
 }
 
 /* ── Item tags ─────────────────────────────────────────────────────── */
@@ -443,18 +533,28 @@ button.sr-link {
   will-change: transform;
 }
 
+/* A label on the shelf edge rather than a control: small, square-cornered, close to its item. */
 .sr-tag {
-  padding: 6px 11px;
-  border-radius: 999px;
-  background: rgb(255 255 255 / 0.94);
-  box-shadow: 0 1px 2px rgb(10 27 32 / 0.1), 0 5px 14px rgb(10 27 32 / 0.1);
-  font-size: 11.5px;
+  position: relative;
+  padding: 4px 8px;
+  border-radius: 5px;
+  background: rgb(255 255 255 / 0.95);
+  box-shadow: 0 1px 2px rgb(10 27 32 / 0.18);
+  font-size: 10.5px;
   font-weight: 700;
-  line-height: 1.25;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
   white-space: nowrap;
   cursor: pointer;
   pointer-events: auto;
   transition: background-color 180ms ease-out, color 180ms ease-out, transform 180ms var(--ease);
+}
+
+/* Room for a fingertip around the small label. */
+.sr-tag::after {
+  content: '';
+  position: absolute;
+  inset: -9px -6px;
 }
 
 .sr-tags[data-visible='false'] .sr-tag {
@@ -503,6 +603,13 @@ button.sr-link {
 
 .sr-card .sr-category {
   padding-right: 40px;
+}
+
+.sr-card-original {
+  margin-top: -6px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .sr-card-close {
@@ -802,8 +909,17 @@ button.sr-link {
   line-height: 1.75;
 }
 
+.sr-profile div:lang(en) {
+  grid-template-columns: 7.8em 1fr;
+}
+
 .sr-profile dt {
   color: var(--ink-soft);
+}
+
+.sr-phrase {
+  display: inline-block;
+  white-space: pre;
 }
 
 .sr-contact {
@@ -843,9 +959,14 @@ button.sr-link {
   text-underline-offset: 4px;
 }
 
+.sr-legal-note,
 .sr-copyright {
   color: var(--ink-faint);
   font-size: 12px;
+}
+
+.sr-legal-note {
+  margin-top: -8px;
 }
 
 .sr-inquiry {
@@ -902,6 +1023,12 @@ button.sr-link {
   letter-spacing: -0.02em;
 }
 
+.sr-static-head .sr-lang {
+  margin-left: auto;
+  font-size: 12px;
+  letter-spacing: 0;
+}
+
 .sr-static main {
   display: grid;
   gap: 14px;
@@ -938,6 +1065,7 @@ button.sr-link {
 
 .sr-static-line li {
   display: grid;
+  align-content: start;
   gap: 2px;
   padding: 14px 16px;
   border-radius: 14px;
@@ -1008,17 +1136,24 @@ button.sr-link {
   }
 
   .sr-caption {
-    top: auto;
     right: 20px;
     bottom: calc(var(--nav-gap) + var(--nav-height) + 16px);
     left: 20px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 5px;
+    max-width: none;
+  }
+
+  .sr-caption-head,
+  .sr-caption-body {
     gap: 4px;
-    width: auto;
-    margin-top: 0;
   }
 
   .sr-caption h2 {
-    font-size: 20px;
+    max-width: none;
+    font-size: 22px;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
   }
 
   .sr-caption-text {
@@ -1032,8 +1167,8 @@ button.sr-link {
   }
 
   .sr-tag {
-    padding: 5px 9px;
-    font-size: 10.5px;
+    padding: 4px 7px;
+    font-size: 10px;
   }
 
   .sr-card {
@@ -1117,14 +1252,24 @@ button.sr-link {
   }
 }
 
-@media (max-height: 520px) and (min-aspect-ratio: 82/100) {
-  .sr-hero-summary,
+/* A short phone screen keeps each wall's name and link, and gives the rest of its height to the display. */
+@media (max-height: 699px) and (max-aspect-ratio: 82/100) {
   .sr-caption-text,
   .sr-caption .sr-note {
     display: none;
   }
+}
 
-  .sr-caption {
-    margin-top: -40px;
+/* A low, wide window: the opening copy drops its second paragraph so that it still stands on the floor. */
+@media (max-height: 689px) and (min-aspect-ratio: 82/100) {
+  .sr-hero-summary {
+    display: none;
+  }
+}
+
+@media (max-height: 520px) and (min-aspect-ratio: 82/100) {
+  .sr-caption-text,
+  .sr-caption .sr-note {
+    display: none;
   }
 }

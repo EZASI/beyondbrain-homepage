@@ -12,7 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
-  Copy,
+  Copy as CopyIcon,
   Info,
   Mail,
   X,
@@ -20,17 +20,17 @@ import {
 import { BRAND_MARK_PATH, BRAND_MARK_VIEWBOX } from '../showroom/brandMark'
 import {
   CONTACT_EMAIL,
-  about,
-  companyIntro,
-  companyProfile,
-  contact,
+  LANGS,
+  LANG_STORAGE_KEY,
+  detectLang,
   findItem,
   findLine,
-  hero,
+  getCopy,
   itemKey,
-  legalLinks,
   lines,
   stationOrder,
+  type Copy,
+  type Lang,
   type LineId,
   type StationId,
 } from '../showroom/content'
@@ -41,6 +41,7 @@ type Mode = 'loading' | 'ready' | 'static'
 type Panel = 'info' | 'list' | null
 
 const STORAGE_KEY = 'beyondbrain.inquiry'
+const SITE_URL = 'https://www.beyondxbrain.com/'
 const INFO_HASHES = new Set(['about', 'company', 'contact'])
 /** Glyphs drawn into the 3D room's screens and signs; requested up front so the fonts are ready. */
 const CANVAS_GLYPHS = '攻城バトルRPG定時退社バトロワオフィス・カードゲームタベモどっちが上？子午線'
@@ -57,35 +58,55 @@ function readHash(): { station?: StationId; panel?: Panel; anchor?: string } {
 function loadInquiry(): string[] {
   try {
     const stored = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? '[]')
-    return Array.isArray(stored)
-      ? stored.filter((key): key is string => typeof key === 'string' && Boolean(findItem(key)))
-      : []
+    /* Item keys are the same in every language, so either copy can vouch for them. */
+    const known = (key: unknown): key is string =>
+      typeof key === 'string' && Boolean(findItem(getCopy('ja'), key))
+    return Array.isArray(stored) ? stored.filter(known) : []
   } catch {
     return []
   }
 }
 
-function inquiryText(keys: string[]) {
+function inquiryText(copy: Copy, keys: string[]) {
   const rows = keys
-    .map((key) => findItem(key))
+    .map((key) => findItem(copy, key))
     .filter((found) => found !== undefined)
-    .map(({ line, item }) => `・${line.title}／${item.name}`)
-  return [
-    '以下について問い合わせます。',
-    '',
-    ...rows,
-    '',
-    '会社名：',
-    'ご担当者名：',
-    'ご希望の数量・納期など：',
-  ].join('\n')
+    .map(({ line, item }) => copy.ui.mailRow(line.title, item.name))
+  return [copy.ui.mailIntro, '', ...rows, '', ...copy.ui.mailFields].join('\n')
 }
 
-function mailto(keys: string[] = []) {
+function mailto(copy: Copy, keys: string[] = []) {
   if (keys.length === 0) return `mailto:${CONTACT_EMAIL}`
-  const subject = encodeURIComponent('お問い合わせ（BeyondBrain ショールーム）')
-  const body = encodeURIComponent(inquiryText(keys))
+  const subject = encodeURIComponent(copy.ui.mailSubject)
+  const body = encodeURIComponent(inquiryText(copy, keys))
   return `mailto:${CONTACT_EMAIL}?subject=${subject}&body=${body}`
+}
+
+function setHead(selector: string, attribute: string, value: string) {
+  document.head.querySelector(selector)?.setAttribute(attribute, value)
+}
+
+function hasLangParam() {
+  const value = new URLSearchParams(window.location.search).get('lang')
+  return value === 'ja' || value === 'en'
+}
+
+/** Keeps the page's own title and description in the language on screen. */
+function describePage(copy: Copy) {
+  const { lang, meta } = copy
+  const other = getCopy(lang === 'ja' ? 'en' : 'ja')
+  document.documentElement.lang = lang
+  document.title = meta.title
+  setHead('meta[name="description"]', 'content', meta.description)
+  setHead('meta[property="og:site_name"]', 'content', meta.siteName)
+  setHead('meta[property="og:title"]', 'content', meta.ogTitle)
+  setHead('meta[property="og:description"]', 'content', meta.ogDescription)
+  setHead('meta[property="og:locale"]', 'content', meta.locale)
+  setHead('meta[property="og:locale:alternate"]', 'content', other.meta.locale)
+  /* A language asked for in the address is a page of its own; the bare address stays the default. */
+  const address = hasLangParam() ? `${SITE_URL}?lang=${lang}` : SITE_URL
+  setHead('link[rel="canonical"]', 'href', address)
+  setHead('meta[property="og:url"]', 'content', address)
 }
 
 function BrandMark({ size = 24 }: { size?: number }) {
@@ -133,13 +154,42 @@ function flyBetween(from: Element | null, to: Element | null) {
   )
 }
 
+function LanguageSwitch({
+  lang,
+  label,
+  onChange,
+}: {
+  lang: Lang
+  label: string
+  onChange: (lang: Lang) => void
+}) {
+  return (
+    <div className="sr-lang" role="group" aria-label={label}>
+      {LANGS.map((code) => (
+        <button
+          key={code}
+          type="button"
+          lang={code}
+          aria-label={code === 'ja' ? '日本語' : 'English'}
+          aria-pressed={lang === code}
+          onClick={() => onChange(code)}
+        >
+          {code === 'ja' ? 'JP' : 'EN'}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function Sheet({
   title,
+  closeLabel,
   anchor,
   onClose,
   children,
 }: {
   title: string
+  closeLabel: string
   /** Section to open at, matched against `data-anchor` inside the sheet. */
   anchor?: string | null
   onClose: () => void
@@ -161,7 +211,13 @@ function Sheet({
 
   return (
     <div className="sr-sheet-layer">
-      <button className="sr-scrim" type="button" aria-label="閉じる" tabIndex={-1} onClick={onClose} />
+      <button
+        className="sr-scrim"
+        type="button"
+        aria-label={closeLabel}
+        tabIndex={-1}
+        onClick={onClose}
+      />
       <section className="sr-sheet" role="dialog" aria-modal="true" aria-label={title}>
         <header className="sr-sheet-head">
           <h2>{title}</h2>
@@ -169,7 +225,7 @@ function Sheet({
             ref={closeRef}
             className="sr-icon-button"
             type="button"
-            aria-label="閉じる"
+            aria-label={closeLabel}
             onClick={onClose}
           >
             <X size={18} aria-hidden="true" />
@@ -185,7 +241,7 @@ function Sheet({
 
 function ContactRow() {
   return (
-    <a className="sr-contact" href={mailto()}>
+    <a className="sr-contact" href={`mailto:${CONTACT_EMAIL}`}>
       <Mail size={18} aria-hidden="true" />
       <span>{CONTACT_EMAIL}</span>
       <ArrowUpRight size={18} aria-hidden="true" />
@@ -193,7 +249,8 @@ function ContactRow() {
   )
 }
 
-function InfoContent() {
+function InfoContent({ copy }: { copy: Copy }) {
+  const { about } = copy
   return (
     <>
       <h3 className="sr-statement">{about.title}</h3>
@@ -205,7 +262,7 @@ function InfoContent() {
       ))}
       <ul className="sr-capabilities">
         {about.capabilities.map((capability) => (
-          <li key={capability.title}>
+          <li key={capability.label}>
             <span>{capability.label}</span>
             <strong>{capability.title}</strong>
             <p>{capability.description}</p>
@@ -214,41 +271,50 @@ function InfoContent() {
       </ul>
 
       <h3 className="sr-sheet-heading" data-anchor="company">
-        会社概要
+        {copy.companyHeading}
       </h3>
-      <p className="sr-prose">{companyIntro}</p>
+      <p className="sr-prose">{copy.companyIntro}</p>
       <dl className="sr-profile">
-        {companyProfile.map((row) => (
+        {copy.companyProfile.map((row) => (
           <div key={row.label}>
             <dt>{row.label}</dt>
-            <dd>{row.value}</dd>
+            <dd>
+              {typeof row.value === 'string'
+                ? row.value
+                : row.value.map((phrase) => (
+                    <span className="sr-phrase" key={phrase}>
+                      {phrase}{' '}
+                    </span>
+                  ))}
+            </dd>
           </div>
         ))}
       </dl>
 
       <h3 className="sr-sheet-heading" data-anchor="contact">
-        {contact.title}
+        {copy.contact.title}
       </h3>
-      <p className="sr-prose">{contact.text}</p>
+      <p className="sr-prose">{copy.contact.text}</p>
       <ContactRow />
 
-      <nav className="sr-legal" aria-label="法務情報">
-        {legalLinks.map((link) => (
+      <nav className="sr-legal" aria-label={copy.legalLabel}>
+        {copy.legalLinks.map((link) => (
           <a href={link.href} key={link.href} target="_blank" rel="noreferrer">
             {link.label}
           </a>
         ))}
       </nav>
+      {copy.legalNote && <p className="sr-legal-note">{copy.legalNote}</p>}
       <p className="sr-copyright">© 2023–2026 BeyondBrain Inc.</p>
     </>
   )
 }
 
 /** Every wall and what it shows, as ordinary markup. */
-function LineOutline() {
+function LineOutline({ copy }: { copy: Copy }) {
   return (
     <>
-      {lines.map((line) => (
+      {copy.lines.map((line) => (
         <section className="sr-static-line" key={line.id}>
           <p className="sr-category">{line.category}</p>
           <h2>
@@ -261,6 +327,7 @@ function LineOutline() {
             {line.items.map((item) => (
               <li key={item.id}>
                 <strong>{item.name}</strong>
+                {item.original && <span lang="ja">{item.original}</span>}
                 {item.kind && <span>{item.kind}</span>}
                 <p>{item.summary}</p>
               </li>
@@ -279,24 +346,32 @@ function LineOutline() {
 }
 
 /** The whole site as a plain page, for browsers that cannot draw the 3D room. */
-function StaticCatalogue() {
+function StaticCatalogue({
+  copy,
+  onLang,
+}: {
+  copy: Copy
+  onLang: (lang: Lang) => void
+}) {
+  const { hero } = copy
   return (
-    <div className="sr-static">
+    <div className="sr-static" lang={copy.lang}>
       <header className="sr-static-head">
         <BrandMark size={30} />
         <span>BeyondBrain</span>
+        <LanguageSwitch lang={copy.lang} label={copy.ui.language} onChange={onLang} />
       </header>
       <main>
         <h1 className="sr-hero-title">
-          <span className="sr-latin">{hero.titleLatin}</span>
-          <span className="sr-mincho">{hero.titleJapanese}</span>
+          <span className="sr-latin">{hero.first}</span>
+          <span className="sr-mincho">{hero.second}</span>
         </h1>
         <p className="sr-hero-lead">{hero.lead}</p>
         <p className="sr-hero-summary">{hero.summary}</p>
 
-        <LineOutline />
+        <LineOutline copy={copy} />
         <section className="sr-static-line">
-          <InfoContent />
+          <InfoContent copy={copy} />
         </section>
       </main>
     </div>
@@ -313,12 +388,20 @@ export default function Showroom() {
   const thumbRef = useRef<HTMLSpanElement>(null)
   const navRef = useRef<HTMLElement>(null)
   const cardRef = useRef<HTMLElement>(null)
+  const mainRef = useRef<HTMLElement>(null)
+  const heroRef = useRef<HTMLElement>(null)
+
+  const [lang, setLang] = useState<Lang>(detectLang)
+  const copy = getCopy(lang)
+  const { hero, ui } = copy
 
   const [mode, setMode] = useState<Mode>('loading')
   const [station, setStation] = useState<StationId>(initial.station ?? 'home')
   const [focusKey, setFocusKey] = useState<string | null>(null)
   const [hoverKey, setHoverKey] = useState<string | null>(null)
   const [moving, setMoving] = useState(false)
+  /** The visitor is turning the room by hand. */
+  const [grabbed, setGrabbed] = useState(false)
   /** The wall the camera last came to rest at; copy for a wall waits until it is reached. */
   const [settled, setSettled] = useState<StationId>(initial.station ?? 'home')
   const [panel, setPanel] = useState<Panel>(initial.panel ?? null)
@@ -334,8 +417,28 @@ export default function Showroom() {
     focusRef.current = focusKey
   }, [station, focusKey])
 
-  const line = findLine(station)
-  const focused = focusKey ? findItem(focusKey) : undefined
+  const line = findLine(copy, station)
+  const focused = focusKey ? findItem(copy, focusKey) : undefined
+
+  const changeLang = useCallback((next: Lang) => {
+    setLang(next)
+    try {
+      window.localStorage.setItem(LANG_STORAGE_KEY, next)
+    } catch {
+      /* The choice still holds for this visit. */
+    }
+    try {
+      const url = new URL(window.location.href)
+      url.searchParams.set('lang', next)
+      window.history.replaceState(null, '', url)
+    } catch {
+      /* Sandboxed frames may refuse history changes. */
+    }
+  }, [])
+
+  useEffect(() => {
+    describePage(copy)
+  }, [copy])
 
   const openInfo = useCallback((anchor: string | null = null) => {
     setInfoAnchor(anchor)
@@ -357,7 +460,7 @@ export default function Showroom() {
 
   const stepItem = useCallback((step: 1 | -1) => {
     setFocusKey((current) => {
-      const found = current ? findItem(current) : undefined
+      const found = current ? findItem(getCopy('ja'), current) : undefined
       if (!found) return current
       const { items } = found.line
       const index = (items.indexOf(found.item) + step + items.length) % items.length
@@ -396,6 +499,12 @@ export default function Showroom() {
           onSwipe: (step) => {
             if (focusRef.current) stepItem(step)
             else stepStation(step)
+          },
+          onGrab: setGrabbed,
+          onTurn: (id) => {
+            stationRef.current = id
+            setFocusKey(null)
+            setStation(id)
           },
         })
         sceneRef.current = scene
@@ -505,6 +614,19 @@ export default function Showroom() {
     }
   }, [inquiry])
 
+  /* Tell the room how much floor the opening copy stands on, whenever that changes. */
+  useLayoutEffect(() => {
+    const main = mainRef.current
+    const hero = heroRef.current
+    if (!main || !hero || mode !== 'ready') return
+    const report = () => sceneRef.current?.setHomeCopy(main.clientHeight - hero.offsetTop)
+    report()
+    const observer = new ResizeObserver(report)
+    observer.observe(hero)
+    observer.observe(main)
+    return () => observer.disconnect()
+  }, [mode])
+
   /* Slide the dark pill under the active navigation item. */
   useLayoutEffect(() => {
     const track = trackRef.current
@@ -526,7 +648,7 @@ export default function Showroom() {
     observer.observe(track)
     document.fonts?.ready.then(measure)
     return () => observer.disconnect()
-  }, [station, mode])
+  }, [station, mode, lang])
 
   const toggleInquiry = (key: string, origin: Element | null) => {
     if (inquiry.includes(key)) {
@@ -541,7 +663,7 @@ export default function Showroom() {
 
   const copyInquiry = async () => {
     try {
-      await navigator.clipboard.writeText(`${CONTACT_EMAIL}\n\n${inquiryText(inquiry)}`)
+      await navigator.clipboard.writeText(`${CONTACT_EMAIL}\n\n${inquiryText(copy, inquiry)}`)
       setCopied(true)
       window.setTimeout(() => setCopied(false), 1800)
     } catch {
@@ -549,7 +671,7 @@ export default function Showroom() {
     }
   }
 
-  if (mode === 'static') return <StaticCatalogue />
+  if (mode === 'static') return <StaticCatalogue copy={copy} onLang={changeLang} />
 
   const ready = mode === 'ready'
   const atHome = station === 'home'
@@ -561,6 +683,7 @@ export default function Showroom() {
   return (
     <div
       className="showroom"
+      lang={lang}
       data-ready={ready}
       data-focused={Boolean(focused)}
       data-station={station}
@@ -570,7 +693,7 @@ export default function Showroom() {
         type="button"
         onClick={() => navRef.current?.querySelector('button')?.focus()}
       >
-        ナビゲーションへスキップ
+        {ui.skip}
       </button>
 
       <div className="sr-stage" ref={mountRef}>
@@ -583,18 +706,19 @@ export default function Showroom() {
       </div>
 
       <header className="sr-header" inert={overlayOpen}>
+        <LanguageSwitch lang={lang} label={ui.language} onChange={changeLang} />
         <button className="sr-brand" type="button" onClick={() => navigate('home')}>
           <span className="sr-brand-row">
             <BrandMark size={22} />
             <span>BeyondBrain</span>
           </span>
-          <small>バーチャルショールーム</small>
+          <small>{ui.tagline}</small>
         </button>
         <button
           ref={listButtonRef}
           className="sr-icon-button sr-list-button"
           type="button"
-          aria-label={`問い合わせリスト（${inquiry.length}件）`}
+          aria-label={ui.listCount(inquiry.length)}
           onClick={() => setPanel('list')}
         >
           <ClipboardList size={19} aria-hidden="true" />
@@ -606,25 +730,26 @@ export default function Showroom() {
         </button>
       </header>
 
-      <main className="sr-main" inert={overlayOpen}>
+      <main className="sr-main" ref={mainRef} inert={overlayOpen}>
         <section
+          ref={heroRef}
           className="sr-hero"
           aria-labelledby="sr-hero-title"
-          data-visible={ready && atHome && settled === 'home' && !focused}
+          data-visible={ready && atHome && settled === 'home' && !focused && !grabbed}
           inert={!atHome}
         >
           <h1 id="sr-hero-title" className="sr-hero-title">
-            <span className="sr-latin">{hero.titleLatin}</span>
-            <span className="sr-mincho">{hero.titleJapanese}</span>
+            <span className="sr-latin">{hero.first}</span>
+            <span className="sr-mincho">{hero.second}</span>
           </h1>
           <p className="sr-hero-lead">{hero.lead}</p>
           <p className="sr-hero-summary">{hero.summary}</p>
           <div className="sr-actions">
             <button className="sr-button" type="button" onClick={() => navigate('fa-parts')}>
-              事業を見る
+              {hero.primary}
             </button>
             <button className="sr-link" type="button" onClick={() => openInfo('contact')}>
-              まずは話す
+              {hero.secondary}
               <ArrowUpRight size={16} aria-hidden="true" />
             </button>
           </div>
@@ -638,24 +763,28 @@ export default function Showroom() {
             data-visible={arrived && !focused}
             inert={Boolean(focused)}
           >
-            <p className="sr-category">{line.category}</p>
-            <h2 id="sr-caption-title">
-              {line.title}
-              {line.status && <span className="sr-status">{line.status}</span>}
-            </h2>
-            <p className="sr-caption-text">{line.description}</p>
-            {line.note && <p className="sr-note">{line.note}</p>}
-            {line.site && (
-              <a className="sr-link" href={line.site.href} target="_blank" rel="noreferrer">
-                {line.site.domain}
-                <ArrowUpRight size={15} aria-hidden="true" />
-              </a>
-            )}
+            <div className="sr-caption-head">
+              <p className="sr-category">{line.category}</p>
+              <h2 id="sr-caption-title">
+                {line.title}
+                {line.status && <span className="sr-status">{line.status}</span>}
+              </h2>
+            </div>
+            <div className="sr-caption-body">
+              <p className="sr-caption-text">{line.description}</p>
+              {line.note && <p className="sr-note">{line.note}</p>}
+              {line.site && (
+                <a className="sr-link" href={line.site.href} target="_blank" rel="noreferrer">
+                  {line.site.domain}
+                  <ArrowUpRight size={15} aria-hidden="true" />
+                </a>
+              )}
+            </div>
           </section>
         )}
 
         {ready && line && (
-          <ul className="sr-tags" data-visible={showTags} aria-label={`${line.title}の展示`}>
+          <ul className="sr-tags" data-visible={showTags} aria-label={ui.itemsOn(line.title)}>
             {line.items.map((item) => {
               const key = itemKey(line, item)
               return (
@@ -689,7 +818,7 @@ export default function Showroom() {
                 <button
                   className="sr-icon-button sr-pager sr-pager-prev"
                   type="button"
-                  aria-label="前の展示"
+                  aria-label={ui.previous}
                   onClick={() => stepItem(-1)}
                 >
                   <ChevronLeft size={18} aria-hidden="true" />
@@ -697,7 +826,7 @@ export default function Showroom() {
                 <button
                   className="sr-icon-button sr-pager sr-pager-next"
                   type="button"
-                  aria-label="次の展示"
+                  aria-label={ui.next}
                   onClick={() => stepItem(1)}
                 >
                   <ChevronRight size={18} aria-hidden="true" />
@@ -714,13 +843,23 @@ export default function Showroom() {
               <button
                 className="sr-icon-button sr-card-close"
                 type="button"
-                aria-label="展示に戻る"
+                aria-label={ui.back}
                 onClick={() => setFocusKey(null)}
               >
                 <X size={17} aria-hidden="true" />
               </button>
-              <p className="sr-category">{focused.line.title}</p>
+              {/* A wall with one thing on it would otherwise say its name twice. */}
+              <p className="sr-category">
+                {focused.item.name === focused.line.title
+                  ? focused.line.category
+                  : focused.line.title}
+              </p>
               <h2 id="sr-card-title">{focused.item.name}</h2>
+              {focused.item.original && (
+                <p className="sr-card-original" lang="ja">
+                  {focused.item.original}
+                </p>
+              )}
               {(focused.item.kind || focused.item.status) && (
                 <p className="sr-card-meta">
                   {focused.item.kind && <span>{focused.item.kind}</span>}
@@ -747,10 +886,10 @@ export default function Showroom() {
                   {added ? (
                     <>
                       <Check size={17} aria-hidden="true" />
-                      {justAdded === focusKey ? 'リストに追加しました' : '追加済み（外す）'}
+                      {justAdded === focusKey ? ui.added : ui.addedRemove}
                     </>
                   ) : (
-                    '問い合わせリストに追加'
+                    ui.add
                   )}
                 </button>
                 {focused.line.site && (
@@ -773,7 +912,7 @@ export default function Showroom() {
       <nav
         ref={navRef}
         className="sr-nav"
-        aria-label="展示の切り替え"
+        aria-label={ui.walls}
         inert={overlayOpen}
       >
         <div className="sr-nav-track" ref={trackRef}>
@@ -785,7 +924,7 @@ export default function Showroom() {
               aria-current={station === id ? 'true' : undefined}
               onClick={() => navigate(id)}
             >
-              {id === 'home' ? 'ホーム' : findLine(id)?.nav}
+              {id === 'home' ? ui.home : findLine(copy, id)?.nav}
             </button>
           ))}
         </div>
@@ -793,7 +932,7 @@ export default function Showroom() {
         <button
           className="sr-nav-info"
           type="button"
-          aria-label="会社情報とお問い合わせ"
+          aria-label={ui.info}
           onClick={() => openInfo()}
         >
           <Info size={18} aria-hidden="true" />
@@ -802,27 +941,30 @@ export default function Showroom() {
 
       {/* The same content as the walls, present in the page for search engines and text tools. */}
       <div hidden>
-        <LineOutline />
-        <InfoContent />
+        <LineOutline copy={copy} />
+        <InfoContent copy={copy} />
       </div>
 
       {panel === 'info' && (
-        <Sheet title="BeyondBrainについて" anchor={infoAnchor} onClose={() => setPanel(null)}>
-          <InfoContent />
+        <Sheet
+          title={ui.aboutTitle}
+          closeLabel={ui.close}
+          anchor={infoAnchor}
+          onClose={() => setPanel(null)}
+        >
+          <InfoContent copy={copy} />
         </Sheet>
       )}
 
       {panel === 'list' && (
-        <Sheet title="問い合わせリスト" onClose={() => setPanel(null)}>
+        <Sheet title={ui.list} closeLabel={ui.close} onClose={() => setPanel(null)}>
           {inquiry.length === 0 ? (
-            <p className="sr-prose">
-              まだ何も入っていません。展示を開いて「問い合わせリストに追加」を押すと、ここにまとまります。
-            </p>
+            <p className="sr-prose">{ui.emptyList}</p>
           ) : (
             <>
               <ul className="sr-inquiry">
                 {inquiry.map((key) => {
-                  const found = findItem(key)
+                  const found = findItem(copy, key)
                   if (!found) return null
                   return (
                     <li key={key}>
@@ -833,7 +975,7 @@ export default function Showroom() {
                       <button
                         className="sr-icon-button"
                         type="button"
-                        aria-label={`${found.item.name}をリストから外す`}
+                        aria-label={ui.remove(found.item.name)}
                         onClick={() => setInquiry((keys) => keys.filter((entry) => entry !== key))}
                       >
                         <X size={16} aria-hidden="true" />
@@ -842,21 +984,19 @@ export default function Showroom() {
                   )
                 })}
               </ul>
-              <p className="sr-prose">
-                リストの内容を本文に入れたメールを作成します。宛先は {CONTACT_EMAIL} です。
-              </p>
+              <p className="sr-prose">{ui.listHint(CONTACT_EMAIL)}</p>
               <div className="sr-sheet-actions">
-                <a className="sr-button" href={mailto(inquiry)}>
+                <a className="sr-button" href={mailto(copy, inquiry)}>
                   <Mail size={17} aria-hidden="true" />
-                  メールを作成
+                  {ui.compose}
                 </a>
                 <button className="sr-button sr-button-quiet" type="button" onClick={copyInquiry}>
                   {copied ? (
                     <Check size={17} aria-hidden="true" />
                   ) : (
-                    <Copy size={17} aria-hidden="true" />
+                    <CopyIcon size={17} aria-hidden="true" />
                   )}
-                  {copied ? 'コピーしました' : '内容をコピー'}
+                  {copied ? ui.copied : ui.copy}
                 </button>
               </div>
             </>

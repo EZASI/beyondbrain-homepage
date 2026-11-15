@@ -4,12 +4,16 @@ import { BRAND_MARK_PATH } from './brandMark'
 /** Colours shared by the 3D room and the interface (see showroom.css). */
 export const COLORS = {
   wall: 0xe4ebe9,
-  floor: 0xc5cecc,
-  ceiling: 0xf1f5f4,
+  ceiling: 0xe9eeed,
   ink: 0x0a1b20,
   mint: 0x5cf4d7,
   panel: 0x0d2b35,
 }
+
+/** The floor is one square this many metres across. */
+export const FLOOR_SIZE = 18
+/** One repeat of the floorboards: sixteen boards wide, and long enough for whole planks. */
+const FLOOR_TILE = { width: 2.4, length: 4.8 }
 
 const LATIN = 'Manrope, "Helvetica Neue", sans-serif'
 const GOTHIC = '"Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", sans-serif'
@@ -61,6 +65,135 @@ function barcode(ctx: CanvasRenderingContext2D, x: number, y: number, width: num
     if (index % 2 === 0) ctx.fillRect(cursor, y, span, height)
     cursor += span
   })
+}
+
+/** Small repeatable generator, so the room looks the same on every visit. */
+export function seeded(seed: number) {
+  let state = seed >>> 0
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0
+    let value = Math.imul(state ^ (state >>> 15), 1 | state)
+    value = (value + Math.imul(value ^ (value >>> 7), 61 | value)) ^ value
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+/** Pale ash floorboards running up the texture; the tile repeats without a seam. */
+const drawFloorboards: Draw = (ctx, width, height) => {
+  const random = seeded(11)
+  const boards = 16
+  const boardWidth = width / boards
+  ctx.fillStyle = '#d6c8b0'
+  ctx.fillRect(0, 0, width, height)
+
+  for (let board = 0; board < boards; board += 1) {
+    const x = board * boardWidth
+    // Two or three end joints per column; the last length wraps round to the first.
+    const joints = [random() * height * 0.3]
+    joints.push(joints[0] + height * (0.3 + random() * 0.12))
+    const third = joints[1] + height * (0.27 + random() * 0.12)
+    if (third < height * 0.96) joints.push(third)
+    joints.forEach((start, index) => {
+      const end = index === joints.length - 1 ? joints[0] + height : joints[index + 1]
+      const hue = 36 + (random() - 0.5) * 5
+      const saturation = 23 + (random() - 0.5) * 6
+      const lightness = 76 + (random() - 0.5) * 4.6
+      const streaks = Array.from({ length: 9 + Math.floor(random() * 6) }, () => ({
+        offset: random() * boardWidth,
+        span: 1 + random() * 2.2,
+        alpha: 0.02 + random() * 0.04,
+      }))
+      // Draw the length where it sits and, if it crosses the edge, again at the top.
+      for (const shift of end > height ? [0, -height] : [0]) {
+        const top = start + shift
+        ctx.fillStyle = `hsl(${hue.toFixed(1)}, ${saturation.toFixed(1)}%, ${lightness.toFixed(1)}%)`
+        ctx.fillRect(x, top, boardWidth, end - start)
+        for (const streak of streaks) {
+          ctx.fillStyle = `rgba(98, 74, 44, ${streak.alpha.toFixed(3)})`
+          ctx.fillRect(x + streak.offset, top, streak.span, end - start)
+        }
+        ctx.fillStyle = 'rgba(74, 54, 30, 0.24)'
+        ctx.fillRect(x, top, boardWidth, 2)
+      }
+    })
+    ctx.fillStyle = 'rgba(74, 54, 30, 0.18)'
+    ctx.fillRect(x, 0, 1.4, height)
+    ctx.fillStyle = 'rgba(255, 250, 240, 0.14)'
+    ctx.fillRect(x + 1.4, 0, 1, height)
+  }
+}
+
+/**
+ * A plaster wall as the room's lights leave it: washed from a slot in the ceiling,
+ * a soft pool where the display hangs, shade in the corners and along the floor.
+ */
+const drawWall: Draw = (ctx, width, height) => {
+  ctx.fillStyle = '#dce4e2'
+  ctx.fillRect(0, 0, width, height)
+
+  const wash = ctx.createLinearGradient(0, 0, 0, height)
+  wash.addColorStop(0, 'rgba(255, 255, 255, 0.16)')
+  wash.addColorStop(0.07, 'rgba(255, 255, 255, 0.62)')
+  wash.addColorStop(0.45, 'rgba(255, 255, 255, 0.2)')
+  wash.addColorStop(0.8, 'rgba(255, 255, 255, 0)')
+  ctx.fillStyle = wash
+  ctx.fillRect(0, 0, width, height)
+
+  ctx.save()
+  ctx.translate(width / 2, height * 0.66)
+  ctx.scale(1, 0.84)
+  const pool = ctx.createRadialGradient(0, 0, 0, 0, 0, width * 0.56)
+  pool.addColorStop(0, 'rgba(255, 255, 255, 0.34)')
+  pool.addColorStop(0.55, 'rgba(255, 255, 255, 0.14)')
+  pool.addColorStop(1, 'rgba(255, 255, 255, 0)')
+  ctx.fillStyle = pool
+  ctx.fillRect(-width, -height, width * 2, height * 2)
+  ctx.restore()
+
+  for (const [from, to] of [
+    [0, width * 0.13],
+    [width, width * 0.87],
+  ]) {
+    const corner = ctx.createLinearGradient(from, 0, to, 0)
+    corner.addColorStop(0, 'rgba(24, 48, 52, 0.17)')
+    corner.addColorStop(1, 'rgba(24, 48, 52, 0)')
+    ctx.fillStyle = corner
+    ctx.fillRect(Math.min(from, to), 0, Math.abs(to - from), height)
+  }
+
+  const foot = ctx.createLinearGradient(0, height * 0.84, 0, height)
+  foot.addColorStop(0, 'rgba(24, 48, 52, 0)')
+  foot.addColorStop(1, 'rgba(24, 48, 52, 0.13)')
+  ctx.fillStyle = foot
+  ctx.fillRect(0, height * 0.84, width, height * 0.16)
+}
+
+/** Lamplight through paper: bright at the heart, amber toward the frame. */
+const drawWashi: Draw = (ctx, width, height) => {
+  ctx.fillStyle = '#eccf98'
+  ctx.fillRect(0, 0, width, height)
+  ctx.save()
+  ctx.translate(width / 2, height * 0.56)
+  ctx.scale(1, height / width)
+  const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, width * 0.62)
+  glow.addColorStop(0, '#fffaf0')
+  glow.addColorStop(0.5, '#fbe9c2')
+  glow.addColorStop(1, 'rgba(236, 207, 152, 0)')
+  ctx.fillStyle = glow
+  ctx.fillRect(-width, -width, width * 2, width * 2)
+  ctx.restore()
+}
+
+/** The light a lamp throws on the surfaces around it; laid over them additively. */
+const drawGlow: Draw = (ctx, width, height) => {
+  ctx.fillStyle = '#000000'
+  ctx.fillRect(0, 0, width, height)
+  const glow = ctx.createRadialGradient(width / 2, height / 2, 0, width / 2, height / 2, width / 2)
+  glow.addColorStop(0, 'rgba(255, 214, 150, 0.5)')
+  glow.addColorStop(0.4, 'rgba(255, 206, 140, 0.2)')
+  glow.addColorStop(1, 'rgba(255, 200, 130, 0)')
+  ctx.fillStyle = glow
+  ctx.fillRect(0, 0, width, height)
 }
 
 const drawWallLogo: Draw = (ctx, width, height) => {
@@ -524,8 +657,17 @@ export function createKit(anisotropy: number) {
   perforation.wrapS = THREE.RepeatWrapping
   perforation.wrapT = THREE.RepeatWrapping
 
+  const floorboards = texture(1024, 2048, drawFloorboards)
+  floorboards.wrapS = THREE.RepeatWrapping
+  floorboards.wrapT = THREE.RepeatWrapping
+  floorboards.repeat.set(FLOOR_SIZE / FLOOR_TILE.width, FLOOR_SIZE / FLOOR_TILE.length)
+
   const textures = {
     wallLogo: texture(2048, 360, drawWallLogo),
+    floorboards,
+    wall: texture(1024, 1024, drawWall),
+    washi: texture(128, 256, drawWashi),
+    glow: texture(256, 256, drawGlow),
     perforation,
     segments: texture(160, 64, drawSegments),
     hmi: texture(512, 320, drawHmi),
@@ -543,10 +685,11 @@ export function createKit(anisotropy: number) {
   }
 
   const mat = {
-    wall: standard({ color: COLORS.wall, roughness: 0.96 }),
-    floor: standard({ color: COLORS.floor, roughness: 0.82 }),
+    wall: standard({ map: textures.wall, roughness: 0.96 }),
+    floor: standard({ map: textures.floorboards, roughness: 0.62 }),
     ceiling: new THREE.MeshBasicMaterial({ color: COLORS.ceiling, toneMapped: false }),
-    skirting: standard({ color: 0xdbe3e1, roughness: 0.8 }),
+    lightSlot: new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }),
+    skirting: standard({ color: 0xd3dcda, roughness: 0.8 }),
     wallLogo: standard({
       map: textures.wallLogo,
       transparent: true,
@@ -597,6 +740,27 @@ export function createKit(anisotropy: number) {
     matcha: standard({ color: 0x86a346, roughness: 0.36 }),
     matchaTin: standard({ color: 0x50702f, roughness: 0.38, metalness: 0.35 }),
     paper: standard({ color: 0xf7f4ec, roughness: 0.85 }),
+
+    culm: standard({ color: 0x8fa55f, roughness: 0.42 }),
+    culmNode: standard({ color: 0x6d8348, roughness: 0.5 }),
+    leaf: standard({ color: 0x6f9a55, roughness: 0.7, side: THREE.DoubleSide }),
+    leafPale: standard({ color: 0x93b56f, roughness: 0.7, side: THREE.DoubleSide }),
+    planter: standard({ color: 0xc3cbc8, roughness: 0.86 }),
+    pebble: standard({ color: 0x4d5759, roughness: 0.95 }),
+    washi: standard({
+      color: 0x241a0c,
+      emissive: 0xffffff,
+      emissiveMap: textures.washi,
+      emissiveIntensity: 1.08,
+      roughness: 0.9,
+    }),
+    glow: new THREE.MeshBasicMaterial({
+      map: textures.glow,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    }),
 
     phone: standard({ color: 0x14181a, roughness: 0.34, metalness: 0.55 }),
     boxSide: standard({ color: 0x0a1b20, roughness: 0.6 }),
